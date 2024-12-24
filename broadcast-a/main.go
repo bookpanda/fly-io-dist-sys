@@ -17,10 +17,11 @@ func main() {
 			return err
 		}
 
-		num := body["message"].(int)
+		num := int(body["message"].(float64))
 		numbers = append(numbers, num)
 
 		body["type"] = "broadcast_ok"
+		delete(body, "message")
 
 		return n.Reply(msg, body)
 	})
