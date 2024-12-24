@@ -53,14 +53,13 @@ func broadcastMessage(al map[string][]string, num int, start string, n *maelstro
 
 func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		select {
 		case <-ctx.Done():
 			lastErr := ctx.Err()
 			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
-			time.Sleep(1 * time.Second)
 		default:
 			success := false
 			n.RPC(neighbor, map[string]any{"type": "send", "message": num}, func(msg maelstrom.Message) error {
@@ -70,7 +69,7 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 				}
 
 				messageType := body["type"]
-				if messageType == "broadcast_ok" {
+				if messageType == "send_ok" {
 					log.Printf("Broadcast message %d to %s", num, neighbor)
 					success = true
 				}
