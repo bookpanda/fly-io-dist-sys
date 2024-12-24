@@ -58,11 +58,7 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
-		select {
-		case <-ctx.Done():
-			lastErr := ctx.Err()
-			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
-		default:
+		go func() {
 			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": num, "receiver": true}, func(msg maelstrom.Message) error {
 				var body map[string]any
 				if err := json.Unmarshal(msg.Body, &body); err != nil {
@@ -80,9 +76,14 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 
 				return nil
 			})
+		}()
 
-			// Wait for the RPC to complete
-			success := <-successCh
+		select {
+		case <-ctx.Done(): // timeout -> cancel, does not care successCh. if time.After() is used instead,
+			// have to be careful with stale go routines
+			lastErr := ctx.Err()
+			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
+		case success := <-successCh: // Wait for the RPC to complete
 			if success {
 				return
 			}
@@ -90,6 +91,5 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 			log.Printf("Retrying broadcast message %d to %s", num, neighbor)
 			time.Sleep(1 * time.Second)
 		}
-
 	}
 }
