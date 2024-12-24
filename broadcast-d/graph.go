@@ -52,6 +52,8 @@ func broadcastMessage(al map[string][]string, num int, start string, n *maelstro
 }
 
 func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
+	successCh := make(chan bool, 1)
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -62,26 +64,31 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
 			time.Sleep(1 * time.Second)
 		default:
-			success := false
-			n.RPC(neighbor, map[string]any{"type": "send", "message": num}, func(msg maelstrom.Message) error {
+			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": num, "receiver": true}, func(msg maelstrom.Message) error {
 				var body map[string]any
 				if err := json.Unmarshal(msg.Body, &body); err != nil {
+					successCh <- false
 					return err
 				}
 
 				messageType := body["type"]
 				if messageType == "broadcast_ok" {
 					log.Printf("Broadcast message %d to %s", num, neighbor)
-					success = true
+					successCh <- true
+				} else {
+					successCh <- false
 				}
 
 				return nil
 			})
 
+			// Wait for the RPC to complete
+			success := <-successCh
 			if success {
 				return
 			}
 
+			log.Printf("Retrying broadcast message %d to %s", num, neighbor)
 			time.Sleep(1 * time.Second)
 		}
 

@@ -20,8 +20,13 @@ func main() {
 
 		num := int(body["message"].(float64))
 		numbers = append(numbers, num)
-		start := msg.Dest
-		broadcastMessage(al, num, start, n)
+		_, ok := body["receiver"]
+		if !ok {
+			start := msg.Dest
+			broadcastMessage(al, num, start, n)
+		} else {
+			delete(body, "receiver")
+		}
 
 		body["type"] = "broadcast_ok"
 		delete(body, "message")
@@ -52,21 +57,6 @@ func main() {
 		mapTopology(topology, al)
 
 		delete(body, "topology")
-
-		return n.Reply(msg, body)
-	})
-
-	n.Handle("send", func(msg maelstrom.Message) error {
-		var body map[string]any
-		if err := json.Unmarshal(msg.Body, &body); err != nil {
-			return err
-		}
-
-		num := int(body["message"].(float64))
-		numbers = append(numbers, num)
-
-		body["type"] = "send_ok"
-		delete(body, "message")
 
 		return n.Reply(msg, body)
 	})
