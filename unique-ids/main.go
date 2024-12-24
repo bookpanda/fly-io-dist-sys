@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -11,6 +12,8 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stderr)
+
 	n := maelstrom.NewNode()
 	prevTimestamp := int64(time.Now().UnixMilli())
 	var seq int64 = 0
@@ -44,7 +47,8 @@ func main() {
 			seq = 0
 			prevTimestamp = timestamp
 		}
-		id |= seq
+		id |= seq << 10 // the node wont accept the first 10 digits e.g. 7277266422153085000 last 3 is always 0
+		log64Bits(id)
 
 		body["type"] = "generate_ok"
 		body["id"] = id
@@ -55,4 +59,17 @@ func main() {
 	if err := n.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func log64Bits(num int64) {
+	log.Printf("%d\n", num)
+	log.Printf("%064b\n", num)
+	sign := num >> 63
+	log.Printf("sign: %d\n", sign)
+	timestamp := num >> 22
+	log.Printf("timestamp: %064b\n", timestamp)
+	node := num >> 20 & 3
+	log.Printf("node: %064b\n", node)
+	seq := num & 0xFFFFF
+	log.Printf("seq: %064b\n", seq)
 }
