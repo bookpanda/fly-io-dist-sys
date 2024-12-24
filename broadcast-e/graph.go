@@ -37,21 +37,26 @@ func mapTopology(topo any, al map[string][]string) {
 	}
 }
 
-func broadcastMessage(al map[string][]string, num int, start string, n *maelstrom.Node) {
+// broadcast arrays of nums every 2 sec or array reach 3 numbers first?
+func broadcastMessage(al map[string][]string, numBuffer *[]int, n *maelstrom.Node) {
+	if len(*numBuffer) == 0 {
+		return
+	}
+
 	var visited = make(map[string]bool)
-	visited[start] = true
+	visited[n.ID()] = true
 
 	for _, node := range al {
 		for _, neighbor := range node {
 			if !visited[neighbor] {
-				go broadcastToNode(n, neighbor, num)
+				go broadcastToNode(n, neighbor, *numBuffer)
 				visited[neighbor] = true
 			}
 		}
 	}
 }
 
-func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
+func broadcastToNode(n *maelstrom.Node, neighbor string, numBuffer []int) {
 	successCh := make(chan bool, 1)
 
 	for {
@@ -59,7 +64,7 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 		defer cancel()
 
 		go func() {
-			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": num, "receiver": true}, func(msg maelstrom.Message) error {
+			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": numBuffer}, func(msg maelstrom.Message) error {
 				var body map[string]any
 				if err := json.Unmarshal(msg.Body, &body); err != nil {
 					successCh <- false
@@ -68,7 +73,7 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 
 				messageType := body["type"]
 				if messageType == "broadcast_ok" {
-					log.Printf("Broadcast message %d to %s", num, neighbor)
+					log.Printf("Broadcast message %v to %s", numBuffer, neighbor)
 					successCh <- true
 				} else {
 					successCh <- false
@@ -82,13 +87,13 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 		case <-ctx.Done(): // timeout -> cancel, does not care successCh. if time.After() is used instead,
 			// have to be careful with stale go routines
 			lastErr := ctx.Err()
-			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
+			log.Printf("Error broadcasting message %v to %s: %v", numBuffer, neighbor, lastErr)
 		case success := <-successCh: // Wait for the RPC to complete
 			if success {
 				return
 			}
 
-			log.Printf("Retrying broadcast message %d to %s", num, neighbor)
+			log.Printf("Retrying broadcast message %v to %s", numBuffer, neighbor)
 			time.Sleep(1 * time.Second)
 		}
 	}

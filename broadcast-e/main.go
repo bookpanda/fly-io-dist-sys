@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"time"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -11,6 +12,14 @@ func main() {
 	n := maelstrom.NewNode()
 	al := make(map[string][]string)
 	numbers := []int{}
+	numBuffer := []int{}
+	lastBroadcast := time.Now()
+
+	go func() {
+		for range time.Tick(2 * time.Second) {
+			broadcastMessage(al, &numBuffer, n)
+		}
+	}()
 
 	n.Handle("broadcast", func(msg maelstrom.Message) error {
 		var body map[string]any
@@ -18,14 +27,23 @@ func main() {
 			return err
 		}
 
-		num := int(body["message"].(float64))
-		numbers = append(numbers, num)
-		_, ok := body["receiver"]
-		if !ok {
-			start := msg.Dest
-			broadcastMessage(al, num, start, n)
-		} else {
-			delete(body, "receiver")
+		message := body["message"]
+		switch messageType := message.(type) {
+		case float64: // receive messages to other nodes
+			num := int(messageType)
+			numBuffer = append(numBuffer, num)
+			numbers = append(numbers, num)
+		case []interface{}: // only receive messages from other nodes
+			for _, m := range messageType {
+				num := int(m.(float64))
+				numbers = append(numbers, num)
+			}
+		}
+
+		if len(numBuffer) > 30 || time.Since(lastBroadcast) > 350*time.Millisecond {
+			broadcastMessage(al, &numBuffer, n)
+			numBuffer = []int{}
+			lastBroadcast = time.Now()
 		}
 
 		body["type"] = "broadcast_ok"
