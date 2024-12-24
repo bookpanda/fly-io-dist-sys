@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
@@ -39,39 +40,23 @@ func broadcastMessage(al map[string][]string, num int, start string, n *maelstro
 	visited[start] = true
 
 	for _, node := range al {
-		// if !visited[stNode] {
 		for _, neighbor := range node {
 			if !visited[neighbor] {
-				n.Send(neighbor, map[string]any{"type": "send", "message": num})
+				n.RPC(neighbor, map[string]any{"type": "send", "message": num}, func(msg maelstrom.Message) error {
+					var body map[string]any
+					if err := json.Unmarshal(msg.Body, &body); err != nil {
+						return err
+					}
+
+					messageType := body["type"]
+					if messageType == "send_ok" {
+						log.Printf("Message sent to %s", neighbor)
+					}
+
+					return nil
+				})
+				visited[neighbor] = true
 			}
 		}
-		// queue = append(queue, node)
-		// visited[node] = true
 	}
-
-	// for len(queue) > 0 {
-	// 	current := queue[0]
-	// 	queue = queue[1:]
-
-	// 	n.Send(current, map[string]any{"type": "send", "message": num})
-
-	// 	for _, node := range al[current] {
-	// 		if !visited[node] {
-	// 			// visited[node] = true
-	// 			queue = append(queue, node)
-	// 		}
-	// 	}
-	// }
-	// for _, v := range al[start] {
-	// 	if !visited[v] {
-	// 		bfs_(al, v, num, visited)
-	// 	}
-	// }
-
-	// for k, v := range al {
-	// 	if visited[k] {
-	// 		continue
-	// 	}
-
-	// }
 }
