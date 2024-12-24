@@ -64,7 +64,7 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, numBuffer []int) {
 		defer cancel()
 
 		go func() {
-			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": numBuffer}, func(msg maelstrom.Message) error {
+			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": numBuffer, "receiver": true}, func(msg maelstrom.Message) error {
 				var body map[string]any
 				if err := json.Unmarshal(msg.Body, &body); err != nil {
 					successCh <- false

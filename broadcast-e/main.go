@@ -15,12 +15,6 @@ func main() {
 	numBuffer := []int{}
 	lastBroadcast := time.Now()
 
-	go func() {
-		for range time.Tick(2 * time.Second) {
-			broadcastMessage(al, &numBuffer, n)
-		}
-	}()
-
 	n.Handle("broadcast", func(msg maelstrom.Message) error {
 		var body map[string]any
 		if err := json.Unmarshal(msg.Body, &body); err != nil {
@@ -40,7 +34,8 @@ func main() {
 			}
 		}
 
-		if len(numBuffer) > 30 || time.Since(lastBroadcast) > 350*time.Millisecond {
+		_, ok := body["receiver"]
+		if !ok && (len(numBuffer) > 40 || time.Since(lastBroadcast) > 200*time.Millisecond) {
 			broadcastMessage(al, &numBuffer, n)
 			numBuffer = []int{}
 			lastBroadcast = time.Now()
@@ -78,6 +73,12 @@ func main() {
 
 		return n.Reply(msg, body)
 	})
+
+	go func() {
+		for range time.Tick(2 * time.Second) {
+			broadcastMessage(al, &numBuffer, n)
+		}
+	}()
 
 	if err := n.Run(); err != nil {
 		log.Fatal(err)
