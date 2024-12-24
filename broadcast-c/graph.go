@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -42,21 +44,46 @@ func broadcastMessage(al map[string][]string, num int, start string, n *maelstro
 	for _, node := range al {
 		for _, neighbor := range node {
 			if !visited[neighbor] {
-				n.RPC(neighbor, map[string]any{"type": "send", "message": num}, func(msg maelstrom.Message) error {
-					var body map[string]any
-					if err := json.Unmarshal(msg.Body, &body); err != nil {
-						return err
-					}
-
-					messageType := body["type"]
-					if messageType == "send_ok" {
-						log.Printf("Message sent to %s", neighbor)
-					}
-
-					return nil
-				})
+				go broadcastToNode(n, neighbor, num)
 				visited[neighbor] = true
 			}
 		}
+	}
+}
+
+func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		select {
+		case <-ctx.Done():
+			lastErr := ctx.Err()
+			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
+			time.Sleep(1 * time.Second)
+		default:
+			success := false
+			n.RPC(neighbor, map[string]any{"type": "send", "message": num}, func(msg maelstrom.Message) error {
+				var body map[string]any
+				if err := json.Unmarshal(msg.Body, &body); err != nil {
+					return err
+				}
+
+				messageType := body["type"]
+				if messageType == "broadcast_ok" {
+					log.Printf("Broadcast message %d to %s", num, neighbor)
+					success = true
+				}
+
+				return nil
+			})
+
+			if success {
+				return
+			}
+
+			time.Sleep(1 * time.Second)
+		}
+
 	}
 }
