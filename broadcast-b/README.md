@@ -1,0 +1,7 @@
+```bash
+go install .
+
+./maelstrom test -w broadcast --bin ~/go/bin/maelstrom-broadcast --node-count 5 --time-limit 20 --rate 10
+
+./maelstrom test -w broadcast --bin ~/go/bin/maelstrom-broadcast --node-count 5 --time-limit 2 --rate 10
+```
