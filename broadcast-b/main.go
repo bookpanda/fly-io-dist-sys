@@ -9,6 +9,7 @@ import (
 
 func main() {
 	n := maelstrom.NewNode()
+	al := make(map[string][]string)
 	numbers := []int{}
 
 	n.Handle("broadcast", func(msg maelstrom.Message) error {
@@ -19,6 +20,8 @@ func main() {
 
 		num := int(body["message"].(float64))
 		numbers = append(numbers, num)
+		start := msg.Dest
+		broadcastMessage(al, num, start, n)
 
 		body["type"] = "broadcast_ok"
 		delete(body, "message")
@@ -45,7 +48,25 @@ func main() {
 		}
 
 		body["type"] = "topology_ok"
+		topology := (body["topology"])
+		mapTopology(topology, al)
+
 		delete(body, "topology")
+
+		return n.Reply(msg, body)
+	})
+
+	n.Handle("send", func(msg maelstrom.Message) error {
+		var body map[string]any
+		if err := json.Unmarshal(msg.Body, &body); err != nil {
+			return err
+		}
+
+		num := int(body["message"].(float64))
+		numbers = append(numbers, num)
+
+		body["type"] = "send_ok"
+		delete(body, "message")
 
 		return n.Reply(msg, body)
 	})
