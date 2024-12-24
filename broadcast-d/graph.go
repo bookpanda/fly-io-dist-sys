@@ -55,14 +55,13 @@ func broadcastToNode(n *maelstrom.Node, neighbor string, num int) {
 	successCh := make(chan bool, 1)
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
 		select {
 		case <-ctx.Done():
 			lastErr := ctx.Err()
 			log.Printf("Error broadcasting message %d to %s: %v", num, neighbor, lastErr)
-			time.Sleep(1 * time.Second)
 		default:
 			n.RPC(neighbor, map[string]any{"type": "broadcast", "message": num, "receiver": true}, func(msg maelstrom.Message) error {
 				var body map[string]any
