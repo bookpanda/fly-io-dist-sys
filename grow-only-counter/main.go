@@ -11,6 +11,7 @@ import (
 func main() {
 	node := maelstrom.NewNode()
 	kv := maelstrom.NewSeqKV(node)
+	sum := 0
 
 	node.Handle("add", func(msg maelstrom.Message) error {
 		var body map[string]any
@@ -21,12 +22,24 @@ func main() {
 		ctx := context.Background()
 		val := int(body["delta"].(float64))
 
-		oldVal, err := kv.ReadInt(ctx, "key")
+		var oldVal int
+		oldVal, err := kv.ReadInt(ctx, node.ID())
 		if err != nil {
-			return err
+			kv.CompareAndSwap(ctx, node.ID(), 0, 0, true)
+			oldVal = 0
 		}
 
-		kv.Write(ctx, "key", oldVal+val)
+		kv.Write(ctx, node.ID(), oldVal+val)
+		sum += val
+
+		_, ok := body["receiver"].(bool)
+		if !ok {
+			for _, neighbor := range node.NodeIDs() {
+				if neighbor != node.ID() {
+					broadcast(node, neighbor, val)
+				}
+			}
+		}
 
 		body["type"] = "add_ok"
 		delete(body, "delta")
@@ -41,13 +54,15 @@ func main() {
 		}
 
 		ctx := context.Background()
-		val, err := kv.ReadInt(ctx, "key")
+		var val int
+		val, err := kv.ReadInt(ctx, node.ID())
 		if err != nil {
-			return err
+			val = 0
 		}
 
 		body["type"] = "read_ok"
 		body["value"] = val
+		// body["value"] = sum
 
 		return node.Reply(msg, body)
 	})
