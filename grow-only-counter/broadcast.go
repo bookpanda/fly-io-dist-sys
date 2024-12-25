@@ -9,6 +9,7 @@ import (
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
 
+// no need: overengineerd
 func broadcast(node *maelstrom.Node, neighbor string) int {
 	successCh := make(chan bool, 1)
 

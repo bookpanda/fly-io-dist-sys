@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"sync"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -24,15 +23,16 @@ func main() {
 
 		for {
 			var oldVal int
-			oldVal, err := kv.ReadInt(ctx, "key")
+			oldVal, err := kv.ReadInt(ctx, node.ID())
 			if err != nil {
-				kv.CompareAndSwap(ctx, "key", 0, 0, true)
+				kv.CompareAndSwap(ctx, node.ID(), 0, 0, true)
 				oldVal = 0
 			}
 
 			// check if there has been a concurrent write samlam (oldVal no longer same as current val)
-			err = kv.CompareAndSwap(ctx, "key", oldVal, oldVal+val, false)
+			err = kv.CompareAndSwap(ctx, node.ID(), oldVal, oldVal+val, false)
 			if err == nil {
+				val += oldVal
 				break
 			}
 		}
@@ -45,35 +45,16 @@ func main() {
 
 	node.Handle("read", func(msg maelstrom.Message) error {
 		replicas := node.NodeIDs()
-		ch := make(chan int, len(replicas))
-		var wg sync.WaitGroup
 
+		ctx := context.Background()
+		sum := 0
 		for _, replica := range replicas {
-			wg.Add(1)
-			go func(replica string) {
-				defer wg.Done()
-				value := broadcast(node, replica)
-				ch <- value
-			}(replica)
-		}
-
-		values := make([]int, len(replicas))
-		for i := 0; i < len(replicas); i++ {
-			val := <-ch
-			values[i] = val
-		}
-
-		// Wait for remaining Goroutines to finish (if needed)
-		go func() {
-			wg.Wait()
-			close(ch) // Ensure channel is closed once all Goroutines complete
-		}()
-
-		maxValue := values[0]
-		for _, v := range values {
-			if v > maxValue {
-				maxValue = v
+			var val int
+			val, err := kv.ReadInt(ctx, replica)
+			if err != nil {
+				val = 0
 			}
+			sum += val
 		}
 
 		var body map[string]any
@@ -82,26 +63,7 @@ func main() {
 		}
 
 		body["type"] = "read_ok"
-		body["value"] = maxValue
-
-		return node.Reply(msg, body)
-	})
-
-	node.Handle("read_self", func(msg maelstrom.Message) error {
-		var body map[string]any
-		if err := json.Unmarshal(msg.Body, &body); err != nil {
-			return err
-		}
-
-		ctx := context.Background()
-		var val int
-		val, err := kv.ReadInt(ctx, "key")
-		if err != nil {
-			val = 0
-		}
-
-		body["type"] = "read_self_ok"
-		body["value"] = val
+		body["value"] = sum
 
 		return node.Reply(msg, body)
 	})
