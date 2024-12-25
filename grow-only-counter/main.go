@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
@@ -36,15 +37,6 @@ func main() {
 			}
 		}
 
-		// _, ok := body["receiver"].(bool)
-		// if !ok {
-		// 	for _, neighbor := range node.NodeIDs() {
-		// 		if neighbor != node.ID() {
-		// 			go broadcast(node, neighbor, val)
-		// 		}
-		// 	}
-		// }
-
 		body["type"] = "add_ok"
 		delete(body, "delta")
 
@@ -52,17 +44,30 @@ func main() {
 	})
 
 	node.Handle("read", func(msg maelstrom.Message) error {
-		var body map[string]any
-		if err := json.Unmarshal(msg.Body, &body); err != nil {
-			return err
-		}
-
 		replicas := node.NodeIDs()
-		values := make([]int, len(replicas))
+		ch := make(chan int, len(replicas))
+		var wg sync.WaitGroup
 
-		for i, replica := range replicas {
-			values[i] = broadcast(node, replica)
+		for _, replica := range replicas {
+			wg.Add(1)
+			go func(replica string) {
+				defer wg.Done()
+				value := broadcast(node, replica)
+				ch <- value
+			}(replica)
 		}
+
+		values := make([]int, len(replicas))
+		for i := 0; i < len(replicas); i++ {
+			val := <-ch
+			values[i] = val
+		}
+
+		// Wait for remaining Goroutines to finish (if needed)
+		go func() {
+			wg.Wait()
+			close(ch) // Ensure channel is closed once all Goroutines complete
+		}()
 
 		maxValue := values[0]
 		for _, v := range values {
@@ -71,28 +76,10 @@ func main() {
 			}
 		}
 
-		// ctx := context.Background()
-		// var val int
-		// val, err := kv.ReadInt(ctx, "key")
-		// if err != nil {
-		// 	val = 0
-		// }
-
-		// for {
-		// 	var currentVal int
-		// 	currentVal, err := kv.ReadInt(ctx, "key")
-		// 	if err != nil {
-		// 		kv.CompareAndSwap(ctx, "key", 0, 0, true)
-		// 		currentVal = 0
-		// 	}
-
-		// 	// check if there has been a concurrent write samlam (currentVal no longer same as current val)
-		// 	err = kv.CompareAndSwap(ctx, "key", currentVal, currentVal+0, false)
-		// 	if err == nil {
-		// 		val = currentVal
-		// 		break
-		// 	}
-		// }
+		var body map[string]any
+		if err := json.Unmarshal(msg.Body, &body); err != nil {
+			return err
+		}
 
 		body["type"] = "read_ok"
 		body["value"] = maxValue
