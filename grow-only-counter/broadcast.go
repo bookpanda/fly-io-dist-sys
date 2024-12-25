@@ -9,15 +9,17 @@ import (
 	maelstrom "github.com/jepsen-io/maelstrom/demo/go"
 )
 
-func broadcast(node *maelstrom.Node, neighbor string, delta int) {
+func broadcast(node *maelstrom.Node, neighbor string) int {
 	successCh := make(chan bool, 1)
 
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 
+		var currentVal int
+
 		go func() {
-			node.RPC(neighbor, map[string]any{"type": "add", "delta": delta, "receiver": true}, func(msg maelstrom.Message) error {
+			node.RPC(neighbor, map[string]any{"type": "read_self"}, func(msg maelstrom.Message) error {
 				var body map[string]any
 				if err := json.Unmarshal(msg.Body, &body); err != nil {
 					successCh <- false
@@ -25,9 +27,10 @@ func broadcast(node *maelstrom.Node, neighbor string, delta int) {
 				}
 
 				messageType := body["type"]
-				if messageType == "add_ok" {
-					log.Printf("Broadcast add %d to %s", delta, neighbor)
+				if messageType == "read_self_ok" {
+					log.Printf("Broadcast read_self to %s", neighbor)
 					successCh <- true
+					currentVal = int(body["value"].(float64))
 				} else {
 					successCh <- false
 				}
@@ -40,13 +43,13 @@ func broadcast(node *maelstrom.Node, neighbor string, delta int) {
 		case <-ctx.Done(): // timeout -> cancel, does not care successCh. if time.After() is used instead,
 			// have to be careful with stale go routines
 			lastErr := ctx.Err()
-			log.Printf("Error broadcasting add %d to %s: %v", delta, neighbor, lastErr)
+			log.Printf("Error broadcasting read self to %s: %v", neighbor, lastErr)
 		case success := <-successCh: // Wait for the RPC to complete
 			if success {
-				return
+				return currentVal
 			}
 
-			log.Printf("Retrying broadcast add %d to %s", delta, neighbor)
+			log.Printf("Retrying broadcast read self to %s", neighbor)
 			time.Sleep(1 * time.Second)
 		}
 	}
