@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 
@@ -8,20 +9,50 @@ import (
 )
 
 func main() {
-	n := maelstrom.NewNode()
+	node := maelstrom.NewNode()
+	kv := maelstrom.NewSeqKV(node)
 
-	n.Handle("echo", func(msg maelstrom.Message) error {
+	node.Handle("add", func(msg maelstrom.Message) error {
 		var body map[string]any
 		if err := json.Unmarshal(msg.Body, &body); err != nil {
 			return err
 		}
 
-		body["type"] = "echo_ok"
+		ctx := context.Background()
+		val := int(body["value"].(float64))
 
-		return n.Reply(msg, body)
+		oldVal, err := kv.Read(ctx, "key")
+		if err != nil {
+			return err
+		}
+		oldNum := oldVal.(int)
+
+		kv.Write(ctx, "key", oldNum+val)
+
+		body["type"] = "add_ok"
+
+		return node.Reply(msg, body)
 	})
 
-	if err := n.Run(); err != nil {
+	node.Handle("read", func(msg maelstrom.Message) error {
+		var body map[string]any
+		if err := json.Unmarshal(msg.Body, &body); err != nil {
+			return err
+		}
+
+		ctx := context.Background()
+		val, err := kv.Read(ctx, "key")
+		if err != nil {
+			return err
+		}
+
+		body["type"] = "read_ok"
+		body["value"] = val
+
+		return node.Reply(msg, body)
+	})
+
+	if err := node.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
