@@ -19,17 +19,17 @@ func main() {
 		}
 
 		ctx := context.Background()
-		val := int(body["value"].(float64))
+		val := int(body["delta"].(float64))
 
-		oldVal, err := kv.Read(ctx, "key")
+		oldVal, err := kv.ReadInt(ctx, "key")
 		if err != nil {
 			return err
 		}
-		oldNum := oldVal.(int)
 
-		kv.Write(ctx, "key", oldNum+val)
+		kv.Write(ctx, "key", oldVal+val)
 
 		body["type"] = "add_ok"
+		delete(body, "delta")
 
 		return node.Reply(msg, body)
 	})
@@ -41,7 +41,7 @@ func main() {
 		}
 
 		ctx := context.Background()
-		val, err := kv.Read(ctx, "key")
+		val, err := kv.ReadInt(ctx, "key")
 		if err != nil {
 			return err
 		}
