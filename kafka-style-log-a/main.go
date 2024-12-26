@@ -27,7 +27,7 @@ func main() {
 			var oldVal any
 			oldVal, err := kv.Read(ctx, key)
 			if err != nil {
-				kv.CompareAndSwap(ctx, key, 0, 0, true)
+				kv.CompareAndSwap(ctx, key, []int{}, []int{}, true)
 				oldVal = []int{}
 			}
 
@@ -59,8 +59,12 @@ func main() {
 			return err
 		}
 
-		offsets, ok := body["offsets"].(map[string]float64)
-		if !ok {
+		// offsets, ok := body["offsets"].(map[string]float64)
+		// if !ok {
+		// 	return nil
+		// }
+		offsets, err := parseMapInt(body["offsets"])
+		if err != nil {
 			return nil
 		}
 
@@ -84,8 +88,8 @@ func main() {
 		}
 
 		body["type"] = "poll_ok"
-		body["msg"] = msgs
-		delete(body, "offset")
+		body["msgs"] = msgs
+		delete(body, "offsets")
 
 		return node.Reply(msg, body)
 	})
