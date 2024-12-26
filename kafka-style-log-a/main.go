@@ -59,31 +59,27 @@ func main() {
 			return err
 		}
 
-		// offsets, ok := body["offsets"].(map[string]float64)
-		// if !ok {
-		// 	return nil
-		// }
 		offsets, err := parseMapInt(body["offsets"])
 		if err != nil {
 			return nil
 		}
 
-		msgs := make(map[string][]int)
+		msgs := make(map[string][][]int)
 		for key, offset := range offsets {
 			ctx := context.Background()
 			var rawLogs any
 			rawLogs, err := kv.Read(ctx, key)
 			if err != nil {
-				rawLogs = []int{}
+				return err
 			}
 
-			logs, ok := rawLogs.([]int)
-			if !ok {
-				logs = []int{}
+			logs, err := parseIntArr(rawLogs)
+			if err != nil {
+				return err
 			}
 
 			for i := int(offset); i < len(logs); i++ {
-				msgs[key] = append(msgs[key], logs[i])
+				msgs[key] = append(msgs[key], []int{i, logs[i]})
 			}
 		}
 
@@ -100,8 +96,8 @@ func main() {
 			return err
 		}
 
-		offsets, ok := body["offsets"].(map[string]float64)
-		if !ok {
+		offsets, err := parseMapInt(body["offsets"])
+		if err != nil {
 			return nil
 		}
 
@@ -111,17 +107,17 @@ func main() {
 				var oldVal any
 				oldVal, err := kv.Read(ctx, key+"_commit")
 				if err != nil {
-					kv.CompareAndSwap(ctx, key+"_commit", 0, 0, true)
-					oldVal = 0
+					kv.CompareAndSwap(ctx, key+"_commit", -1, -1, true)
+					oldVal = -1
 				}
 
 				currentOffset, ok := oldVal.(int)
 				if !ok {
-					currentOffset = 0
+					currentOffset = -1
 				}
 
 				if int(offset) <= currentOffset {
-					continue
+					break
 				}
 
 				err = kv.CompareAndSwap(ctx, key+"_commit", oldVal, int(offset), false)
@@ -143,8 +139,8 @@ func main() {
 			return err
 		}
 
-		keys, ok := body["keys"].([]string)
-		if !ok {
+		keys, err := parseStringArr(body["keys"])
+		if err != nil {
 			return nil
 		}
 
@@ -153,7 +149,7 @@ func main() {
 			ctx := context.Background()
 			offset, err := kv.ReadInt(ctx, key+"_commit")
 			if err != nil {
-				offset = 0
+				continue
 			}
 
 			offsets[key] = offset

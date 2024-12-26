@@ -70,3 +70,39 @@ func parseMapInt(field interface{}) (map[string]int, error) {
 
 	return intMap, nil
 }
+
+func parseStringArr(field interface{}) ([]string, error) {
+	fieldSlice, ok := field.([]interface{})
+	if !ok {
+		return nil, errors.New("field is not a slice")
+	}
+
+	strArr := make([]string, len(fieldSlice))
+	for i, elem := range fieldSlice {
+		elemStr, isStr := elem.(string)
+		if !isStr {
+			return nil, errors.New("element is not a string")
+		}
+		strArr[i] = elemStr
+	}
+
+	return strArr, nil
+}
+
+func parseIntArr(field interface{}) ([]int, error) {
+	fieldSlice, ok := field.([]interface{})
+	if !ok {
+		return nil, errors.New("field is not a slice")
+	}
+
+	intArr := make([]int, len(fieldSlice))
+	for i, elem := range fieldSlice {
+		elemInt, isInt := elem.(float64)
+		if !isInt {
+			return nil, errors.New("element is not an int")
+		}
+		intArr[i] = int(elemInt)
+	}
+
+	return intArr, nil
+}
