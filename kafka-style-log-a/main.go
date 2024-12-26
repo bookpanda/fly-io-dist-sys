@@ -27,7 +27,7 @@ func main() {
 			var oldVal any
 			oldVal, err := kv.Read(ctx, key)
 			if err != nil {
-				kv.CompareAndSwap(ctx, node.ID(), 0, 0, true)
+				kv.CompareAndSwap(ctx, key, 0, 0, true)
 				oldVal = []int{}
 			}
 
@@ -107,7 +107,7 @@ func main() {
 				var oldVal any
 				oldVal, err := kv.Read(ctx, key+"_commit")
 				if err != nil {
-					kv.CompareAndSwap(ctx, node.ID(), 0, 0, true)
+					kv.CompareAndSwap(ctx, key+"_commit", 0, 0, true)
 					oldVal = 0
 				}
 
@@ -120,7 +120,7 @@ func main() {
 					continue
 				}
 
-				err = kv.CompareAndSwap(ctx, key, oldVal, int(offset), false)
+				err = kv.CompareAndSwap(ctx, key+"_commit", oldVal, int(offset), false)
 				if err == nil {
 					break
 				}
