@@ -31,9 +31,9 @@ func main() {
 				oldVal = []int{}
 			}
 
-			currentLogs, ok := oldVal.([]int)
-			if !ok {
-				currentLogs = []int{}
+			currentLogs, err := parseIntSlice(oldVal)
+			if err != nil {
+				return err
 			}
 
 			// check if there has been a concurrent write samlam (oldVal no longer same as current val)
@@ -73,7 +73,7 @@ func main() {
 				return err
 			}
 
-			logs, err := parseIntArr(rawLogs)
+			logs, err := parseIntSlice(rawLogs)
 			if err != nil {
 				return err
 			}

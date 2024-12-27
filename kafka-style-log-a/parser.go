@@ -89,20 +89,28 @@ func parseStringArr(field interface{}) ([]string, error) {
 	return strArr, nil
 }
 
-func parseIntArr(field interface{}) ([]int, error) {
-	fieldSlice, ok := field.([]interface{})
-	if !ok {
-		return nil, errors.New("field is not a slice")
-	}
+func parseIntSlice(field any) ([]int, error) {
+	switch v := field.(type) {
+	case []int:
+		return v, nil
+	case []interface{}:
 
-	intArr := make([]int, len(fieldSlice))
-	for i, elem := range fieldSlice {
-		elemInt, isInt := elem.(float64)
-		if !isInt {
-			return nil, errors.New("element is not an int")
+		fieldSlice, ok := field.([]interface{})
+		if !ok {
+			return nil, errors.New("field is not a slice")
 		}
-		intArr[i] = int(elemInt)
-	}
 
-	return intArr, nil
+		intArr := make([]int, len(fieldSlice))
+		for i, elem := range fieldSlice {
+			elemInt, isInt := elem.(float64)
+			if !isInt {
+				return nil, errors.New("element is not an int")
+			}
+			intArr[i] = int(elemInt)
+		}
+
+		return intArr, nil
+	default:
+		return nil, errors.New("field is not a []int or []interface{}")
+	}
 }
