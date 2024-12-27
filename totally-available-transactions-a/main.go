@@ -40,7 +40,7 @@ func main() {
 			ctx := context.Background()
 			switch operation {
 			case "r":
-				key := transaction[1].(int)
+				key := int(transaction[1].(float64))
 				val, err := kv.ReadInt(ctx, strconv.Itoa(key))
 				if err != nil {
 					result = append(result, []interface{}{"r", key, nil})
@@ -50,9 +50,9 @@ func main() {
 				result = append(result, []interface{}{"r", key, val})
 
 			case "w":
-				key := transaction[1].(int)
+				key := int(transaction[1].(float64))
 				keyStr := strconv.Itoa(key)
-				val := transaction[2].(int)
+				val := int(transaction[2].(float64))
 
 				for {
 					var oldVal int
