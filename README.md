@@ -15,6 +15,8 @@ I used twitter's 64-bit Snowflake ID to generate unique IDs.
 - go routines for broadcast to other nodes
 - batching of broadcast messages to reduce message per operation (by number of message and time since last message)
 - go routines for flushing broadcasts incase of no new broadcast messages and it has reached buffer threshold
+> If anyone can solve 3e problem with median latency < 1 sec and maximum latency < 2 secs, please feel free to share your solution. I'd love to learn the solution.
+
 
 ## 4. Grow-Only Counter
 - write: one key per node
