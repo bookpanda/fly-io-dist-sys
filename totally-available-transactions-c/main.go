@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
 	"strconv"
 	"time"
 
@@ -11,13 +12,16 @@ import (
 )
 
 func main() {
+	log.SetOutput(os.Stderr)
+
 	node := maelstrom.NewNode()
 	kv := maelstrom.NewSeqKV(node)
 
 	node.Handle("txn", func(msg maelstrom.Message) error {
+		log.Printf("HELLO")
 		var body map[string]any
 		if err := json.Unmarshal(msg.Body, &body); err != nil {
-			return err
+			return nil
 		}
 
 		rawTxn := body["txn"]
@@ -28,6 +32,8 @@ func main() {
 
 		now := time.Now().UnixMilli()
 		result := []interface{}{}
+		writeBuffer := make(map[int]int)
+
 		for _, txn := range txnArr {
 			transaction, ok := txn.([]interface{})
 			if !ok {
@@ -40,9 +46,9 @@ func main() {
 			}
 
 			ctx := context.Background()
+			key := int(transaction[1].(float64))
 			switch operation {
 			case "r":
-				key := int(transaction[1].(float64))
 				rawVersions, err := kv.Read(ctx, strconv.Itoa(key))
 				if err != nil {
 					result = append(result, []interface{}{"r", key, nil})
@@ -54,62 +60,59 @@ func main() {
 					return nil
 				}
 
-				high := len(versions) - 1
-				low := 0
-				idx := -1
-
-				for low <= high {
-					mid := low + (high-low)/2
-
-					version, ok := versions[mid].([]interface{})
+				committedVersions := []interface{}{}
+				for _, version := range versions {
+					v, ok := version.([]interface{})
 					if !ok {
 						return nil
 					}
-					timestamp := int64(version[0].(float64))
-
-					if timestamp >= now {
-						high = mid - 1
-					} else if timestamp < now {
-						low = mid + 1
-						idx = mid
+					timestamp := int64(v[0].(float64))
+					if timestamp < now {
+						committedVersions = append(committedVersions, version)
 					}
 				}
 
-				version, ok := versions[idx].([]interface{})
+				if len(committedVersions) == 0 {
+					result = append(result, []interface{}{"r", key, nil})
+					continue
+				}
+
+				latest := committedVersions[len(committedVersions)-1]
+				val := int(latest.([]interface{})[1].(float64))
+				log.Printf("key: %d, val: %v", key, val)
+
+				result = append(result, []interface{}{"r", key, val})
+			case "w":
+				val := int(transaction[2].(float64))
+				writeBuffer[key] = val
+				result = append(result, []interface{}{"w", key, val})
+			}
+		}
+
+		ctx := context.Background()
+		for key, val := range writeBuffer {
+			keyStr := strconv.Itoa(key)
+			for {
+				rawVersions, err := kv.Read(ctx, keyStr)
+				if err != nil {
+					kv.CompareAndSwap(ctx, keyStr, [][]int{}, [][]int{}, true)
+					rawVersions = []interface{}{}
+				}
+
+				versions, ok := rawVersions.([]interface{})
 				if !ok {
 					return nil
 				}
-				val := int(version[1].(float64))
 
-				result = append(result, []interface{}{"r", key, val})
+				newVersion := []interface{}{float64(now), float64(val)}
+				updatedVersions := append(versions, newVersion)
 
-			case "w":
-				key := int(transaction[1].(float64))
-				keyStr := strconv.Itoa(key)
-				val := int(transaction[2].(float64))
+				log.Printf("key: %d, versions: %v", key, updatedVersions)
 
-				for {
-					rawVersions, err := kv.Read(ctx, keyStr)
-					if err != nil {
-						kv.CompareAndSwap(ctx, keyStr, [][]int{}, [][]int{}, true)
-						rawVersions = [][]int{}
-					}
-
-					versions, ok := rawVersions.([]interface{})
-					if !ok {
-						return nil
-					}
-
-					versions = append(versions, []interface{}{int(now), int(val)})
-
-					// check if there has been a concurrent write samlam (oldVal no longer same as current val)
-					err = kv.CompareAndSwap(ctx, keyStr, rawVersions, versions, false)
-					if err == nil {
-						break
-					}
+				err = kv.CompareAndSwap(ctx, keyStr, versions, updatedVersions, false)
+				if err == nil {
+					break
 				}
-
-				result = append(result, []interface{}{"w", key, val})
 			}
 		}
 
